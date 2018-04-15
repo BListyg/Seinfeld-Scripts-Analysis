@@ -1,0 +1,24 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1523741188701.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "150|6|183|0|\n",
+    "hash" : "0",
+    "id" : "653D5944",
+    "lastKnownWriteTime" : 1523826417,
+    "last_content_update" : 1523826417067,
+    "path" : "~/Documents/s2-courses-2017-18/data-science-with-r/case-study/Seinfeld-Analysis.Rmd",
+    "project_path" : "Seinfeld-Analysis.Rmd",
+    "properties" : {
+        "cursorPosition" : "250,173",
+        "last_setup_crc32" : "440CCA66bb338d19",
+        "scrollLine" : "247",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

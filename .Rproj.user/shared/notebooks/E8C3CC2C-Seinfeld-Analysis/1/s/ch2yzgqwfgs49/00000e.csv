@@ -1,0 +1,6 @@
+"0","tidy_season_script <- function(season_num) {"
+"0","  myDF <-  tidy_scripts %>% "
+"0","    group_by(Season) %>% "
+"0","    filter(Season == season_num)"
+"0","  return(myDF)"
+"0","}"

@@ -1,0 +1,91 @@
+---
+title: "Case Study in `ggplot2`"
+author: "Paul Intrevado"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(fig.width=5, fig.height=3.5) 
+```
+
+```{r libraries, include = F}
+library(tidyverse)
+library(hflights)
+library(magrittr)
+library(scales)
+library(reshape2)
+library(gcookbook)
+```
+
+## Question 1
+
+The `reshape` package contains a dataset named `tips`, which contains information on dining trasactions. Summary of the data follows:
+
+```{r}
+glimpse(tips)
+```
+
+Create the following graphs:
+
+\ 
+
+(a) Plot `time` on x-axis, total_bill on the y-axis, colored by `smoker` and shaped by `sex`.
+
+```{r}
+tips %>% 
+  ggplot() +
+    geom_point(aes(x = time, y = total_bill, shape = sex, colour = smoker))
+```
+\newpage
+(b) `jitter` the previous plot so points are more visible
+
+```{r}
+tips %>% 
+  ggplot() +
+    geom_point(aes(x = time, y = total_bill, shape = sex, colour = smoker), position = "jitter")
+```
+
+(c) Create a graph with `time` on the x-axis, mean `tip` on the y-axis, shaped and coloured by `sex`.
+
+```{r}
+tips %>% 
+  mutate(prctTip = tip / total_bill) %>% 
+    group_by(sex, time) %>% 
+      summarize(meanPrct = mean(prctTip, na.rm = T)) %>% 
+        ggplot() +
+          geom_line(aes(x = time, y = meanPrct, group = sex), linetype = "dotted", alpha = 0.6) +
+          geom_point(aes(x = time, y = meanPrct, shape = sex, colour = sex), size = 6, alpha = 0.4) +
+          xlab("\nMeal Time") +
+          ylab("Mean Percent Tip\n") +
+          scale_y_continuous(labels = percent, limits = c(0.15, 0.18), breaks = seq(0.15, 0.18, by = 0.005)) + 
+          theme(axis.text.x = element_text(colour="grey20",size=14,angle=30,hjust=.5,vjust=.5),
+            axis.text.y = element_text(colour="grey20",size=10),  
+            axis.title.x = element_text(colour="grey20",size=14),
+            axis.title.y = element_text(colour="grey20",size=14)) + 
+          scale_colour_brewer(palette = "Set1")
+```
+\newpage
+
+(d) Create a graph with `time` on the x-axis, `smoker` on the y-axis, colored by `sex` and sized by `prctTip`, with a minimalist `theme`.
+
+```{r}
+tips %>% 
+  mutate(prctTip = tip / total_bill) %>% 
+    group_by(sex, smoker, time) %>% 
+      ggplot() +
+      geom_point(aes(x = time, y = smoker, size = prctTip, color = sex), position = "jitter", alpha = 0.7) + 
+      xlab("\nMeal Time") +
+      ylab("Smoker/Non-Smoker\n") +
+      theme(axis.text.x = element_text(colour="grey20",size=14),
+            axis.text.y = element_text(colour="grey20",size=10),  
+            axis.title.x = element_text(colour="grey20",size=14),
+            axis.title.y = element_text(colour="grey20",size=14)) + 
+          scale_colour_brewer(palette = "Set1") + theme_minimal()
+```
+
+
+          
+
+
