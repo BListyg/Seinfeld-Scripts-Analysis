@@ -1,1 +1,21 @@
-"0","  "
+"0","tidy_scripts %>% 
+  inner_join(get_sentiments(scoring_sentiment)) %>% 
+  count(word, sentiment, sort = T) %>% 
+  ungroup() %>% 
+  group_by(sentiment) %>% 
+  filter(word != ""funny"") %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  
+  ggplot() +
+  geom_col(aes(x = word, y = n, fill = sentiment), show.legend = F) +
+  facet_wrap(~sentiment, scales = ""free_y"") +
+  labs(x = ""Word"", y = ""Contribution to sentiment"") +
+  coord_flip() +
+  theme_light()
+"
+"2","Joining, by = ""word""
+"
+"2","Selecting by n
+"

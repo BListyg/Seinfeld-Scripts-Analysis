@@ -243,7 +243,7 @@ tidy_scripts %>%
   facet_wrap(~sentiment, scales = "free_y") +
   labs(x = "Word", y = "Contribution to sentiment") +
   coord_flip() +
-  theme_bw()
+  theme_light()
 ```
 
 ## Let's take a look at positive versus negative words using a wordcloud.
@@ -257,4 +257,100 @@ tidy_scripts %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>% 
   comparison.cloud(colors = c("red", "blue"), max.words = 100, rot.per = 0)
 ```
+
+## Let's consider sentiment beyond words and look at sentiment by season and episode number.
+
+```{r}
+tidy_scripts %>% 
+  group_by(EpisodeNo, Season) %>%
+  mutate(total_words = n()) %>% 
+  inner_join(get_sentiments(scoring_sentiment)) %>% 
+  count(word, sentiment, sort = T) %>% 
+  spread(sentiment, n, fill = 0) %>% 
+  mutate(sentiment = positive - negative) %>% 
+  summarise(overall_sentiment = sum(sentiment)) %>% 
+  
+  ggplot() +
+  geom_col(aes(x = EpisodeNo, y = overall_sentiment, fill = Season), show.legend = F) +
+  facet_wrap(~Season, ncol = 3, scales = "free_x")
+  
+```
+
+
+## Term Frequency 
+
+```{r}
+seinfeld_words <- scripts %>%
+  unnest_tokens(word, Dialogue) %>%
+  group_by(Season) %>%
+  count(word, SEID, EpisodeNo, Season, sort = T) %>% 
+  ungroup()
+
+seinfeld_words
+
+
+totalWords_by_season <-  seinfeld_words %>% 
+   group_by(Season) %>% 
+   summarise(total_words = sum(n))
+
+seinfeld_words <- left_join(seinfeld_words, totalWords_by_season)
+
+```
+
+
+## Zipf's law
+#### Zipf’s law states that the frequency that a word appears is inversely proportional to its rank.
+
+```{r}
+freq_by_rank <- seinfeld_words %>% 
+  group_by(Season) %>% 
+  mutate(rank = row_number(),
+         term_frequency = (n / total_words)) 
+
+kable(head(freq_by_rank))
+
+```
+
+To visualize Zipf's law we can plot `rank` on the x-axis and `term_frequency` on the y-axis, on logarithmic scales. This should yield an inversely proportional relationship with a constant, negative slope. 
+
+```{r}
+freq_by_rank %>% 
+  ggplot() +
+  geom_line(aes(x = rank, y = term_frequency, color = Season),
+            show.legend = F, size = 1, alpha = .8) +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+## Using tf-idf to find words that are important (i.e. common) in Seinfeld, but not to common.
+
+```{r}
+seinfeld_words <- seinfeld_words %>% 
+  bind_tf_idf(word, Season, n)
+
+kable(head(seinfeld_words))
+```
+
+Let's look at words with high tf-idf in Seinfeld.
+
+```{r}
+plot_seinfeld <-  seinfeld_words %>%
+  arrange(desc(tf_idf)) %>% 
+  mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+  group_by(Season) %>% 
+  top_n(10, tf_idf) 
+  
+
+plot_seinfeld %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, tf_idf)) %>% 
+  ggplot(aes(x = word, y = tf_idf, fill = Season)) +
+  geom_col(show.legend = F) +
+  facet_wrap(~Season, ncol = 4, scales = "free") +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip() +
+  theme_light()
+```
+
+
 
