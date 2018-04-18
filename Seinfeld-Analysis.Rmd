@@ -22,10 +22,12 @@ library(wordcloud) # word cloud
 library(stringr) # string manipulation
 library(ngram) # string manipulation 
 library(topicmodels) # topic modeling 
+library(tm) # for converting dfs into Document-Term Matrices
 library(igraph)
 library(ggraph)
 library(knitr) # tables in RMarkdown
 library(scales)
+library(widyr)
 library(reshape2) # turn data into a matrix 
 ```
 
@@ -410,11 +412,210 @@ bigrams_tf_idf %>%
   labs(x = NULL, y = "tf-idf") +
   coord_flip() +
   theme_light()
-
 ```
 
 
 
+# Topic Modeling: Is Seinfeld really a show about nothing?
+
+```{r}
+season_word_counts <- tidy_scripts %>%
+  anti_join(stop_words) %>% 
+  filter(word != c("yeah", "hey")) %>% 
+  count(Season, word, sort = T) %>% 
+  ungroup()
+
+seasons_dtm <- season_word_counts %>% 
+  cast_dtm(Season, word, n)
+# seasons_dtm
+
+seasons_lda <- LDA(seasons_dtm, k = 9, control = list(seed = 1234))
+seasons_lda  
 
 
+# per-topic-per-word probabilities  
+seasons_topics <- tidy(seasons_lda, matrix = "beta")
+seasons_topics
+
+
+# find the top 8 terms within each topic 
+season_top_terms <- seasons_topics %>% 
+  group_by(topic) %>% 
+  top_n(8, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
+
+season_top_terms %>% 
+  mutate(term = reorder(term, beta)) %>% 
+  ggplot() +
+  geom_col(aes(x = term, y = beta, fill = factor(topic)), show.legend = F) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  theme_light()
+
+```
+
+## Per-document-per-topic probabilities 
+
+```{r}
+seasons_doc_topic_probabilities <- tidy(seasons_lda, matrix = "gamma")
+seasons_doc_topic_probabilities
+
+seasons_doc_topic_probabilities %>% 
+  mutate(document = reorder(document, topic * gamma)) %>% 
+  ggplot() +
+  geom_boxplot(aes(factor(topic), gamma)) +
+  labs(x = "Gamma", y = "Season", title = "Probability Of A Season Belonging To A Topic")
+
+
+```
+
+## Which words were assigned in each season were assigned to which topic?
+
+```{r}
+word_topic_assignments <- augment(seasons_lda, data = seasons_dtm)
+
+season_classification <-  seasons_doc_topic_probabilities %>% 
+  group_by(document) %>% 
+  top_n(1, gamma) %>% 
+  ungroup()
+
+season_topics <- season_classification %>% 
+  count(document, topic) %>% 
+  group_by(document) %>% 
+  top_n(1, n) %>% 
+  ungroup() %>% 
+  transmute(consensus = document, topic)
+season_topics
+  
+
+season_classification %>% 
+  inner_join(season_topics, by = "topic") %>% 
+  filter(document != consensus)
+
+
+topic_assignments <- augment(seasons_lda, data = seasons_dtm) %>% 
+  inner_join(season_topics, by = c(".topic" = "topic"))
+topic_assignments
+
+topic_assignments %>% 
+  count(document, consensus, wt = count) %>% 
+  group_by(document) %>%   
+  mutate(percent = n / sum(n)) %>% 
+  ggplot(aes(consensus, document, fill = percent)) +
+  geom_tile() +
+  scale_fill_gradient2(high = muted("red"), label = percent_format()) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(x = "Season words were assigned to",
+       y = "Season words came from",
+       fill = "% of assignments")
+
+```
+
+## What were the most commonly mistaken words?
+
+```{r}
+wrong_words <- topic_assignments %>% 
+  filter(document != consensus)
+
+wrong_words %>% 
+  count(document, consensus, term, wt = count) %>% 
+  ungroup() %>%
+  arrange(desc(n)) %>% 
+  slice(1:10)
+```
+
+## Which seasons tended to be similar to each other in text content?
+
+```{r}
+season_cors <- season_word_counts %>% 
+  pairwise_cor(Season, word, n, sort = T)
+
+set.seed(2018)
+
+season_cors %>% 
+  filter(correlation > 0.7) %>% 
+  graph_from_data_frame() %>% 
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(alpha = correlation, width = correlation)) +
+  geom_node_point(size = 6, color = "lightblue") +
+  geom_node_text(aes(label = name), color = "orange", fontface = "bold", repel = TRUE) +
+  theme_void()
+```
+
+Looks like season 1 and 2 discused similar topics while seasons 3 through 9 shared similar topics. 
+
+# Topic modeling: identifying topics by character
+
+## Most important words spoken by each character:
+```{r}
+word_counts <- tidy_scripts %>% 
+  filter(Character %in% top9_mainCharacters$Character[1:9]) %>% 
+  count(Character, word, sort = T) %>% 
+  ungroup()
+
+total_words <- word_counts %>% 
+  group_by(Character) %>% 
+  summarise(total = sum(n))
+total_words
+  
+word_counts_tf_idf <- left_join(word_counts, total_words) %>% 
+  bind_tf_idf(word, Character, n)
+  
+word_counts_tf_idf %>% 
+  arrange(desc(tf_idf)) %>% 
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(Character) %>% 
+  top_n(8, tf_idf) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, tf_idf)) %>% 
+  ggplot() +
+  geom_col(aes(x = word, y = tf_idf, fill = Character)) +
+  facet_wrap(~ Character, scales = "free") +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip() +
+  theme_bw()
+
+```
+
+## Similarity between characters:
+
+```{r}
+
+characters_dtm <- word_counts %>% 
+  mutate(Character = as.character(Character)) %>% 
+  cast_dtm(Character, word, n) 
+
+characters_lda <- LDA(characters_dtm, k = 9, control = list(seed = 1234))
+
+character_topics <- tidy(characters_lda, matrix = "beta")
+
+top_terms_by_character <- character_topics %>% 
+  group_by(topic) %>% 
+  top_n(8, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
+
+top_terms_by_character %>% 
+  mutate(term = reorder(term, beta)) %>% 
+  ggplot() +
+  geom_col(aes(x = term, y = beta, fill = factor(topic)), show.legend = F) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+character_cors <- word_counts %>% 
+  pairwise_cor(Character, word, n, sort = T)
+
+set.seed(2018)
+character_cors %>%
+  filter(correlation > .4) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(alpha = correlation, width = correlation)) +
+  geom_node_point(size = 6, color = "lightblue") +
+  geom_node_text(aes(label = name), color = "orange", fontface = "bold", repel = TRUE) +
+  theme_void()
+```
 

@@ -1,6 +1,0 @@
-"0","kable(tidy_scripts %>% 
-  inner_join(get_sentiments(""bing"")) %>% 
-  count(sentiment))
-"
-"2","Joining, by = ""word""
-"
